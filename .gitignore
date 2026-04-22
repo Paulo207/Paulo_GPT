@@ -1,0 +1,26 @@
+# Variáveis de ambiente (NUNCA suba a chave API para o GitHub!)
+.env
+
+# Secrets do Streamlit Cloud (NUNCA suba para o GitHub!)
+.streamlit/secrets.toml
+
+# Ambiente virtual Python
+.venv/
+venv/
+env/
+
+# Cache Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Memória local (conversas salvas)
+memory/
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/

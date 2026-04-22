@@ -1,0 +1,14 @@
+[server]
+# Aceita conexões de qualquer IP (não só localhost)
+# Isso permite que o celular na mesma Wi-Fi acesse o app
+address = "0.0.0.0"
+port = 8501
+
+# Desabilita proteção CORS para que o celular consiga carregar a câmera
+enableCORS = false
+enableXsrfProtection = false
+
+[browser]
+# Não abre o browser automaticamente ao reiniciar
+serverAddress = "localhost"
+gatherUsageStats = false
