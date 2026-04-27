@@ -50,8 +50,7 @@ _DEFAULTS = {
     "total_tokens":  0,
     "total_messages": 0,
     "theme":         "light",
-    "pdf_context":   None,   # str: full extracted PDF text
-    "pdf_name":      None,   # str: filename
+    "pdf_docs":      [],     # list of dicts: {name, text, chars}
     "pending_image": None,   # dict: {b64, mime, name}
     "img_input_key": 0,      # incremented to reset uploaders after send
 }
@@ -376,12 +375,13 @@ def build_api_payload(system_prompt: str, history: list,
                       pending_image: dict | None, user_text: str) -> list:
     """Compose the messages list for the OpenRouter API call."""
     full_system = system_prompt
-    if st.session_state.pdf_context:
-        full_system += (
-            "\n\n--- DOCUMENTO PDF CARREGADO PELO USUÁRIO ---\n"
-            + st.session_state.pdf_context
-            + "\n--- FIM DO DOCUMENTO ---"
-        )
+    if st.session_state.pdf_docs:
+        for i, doc in enumerate(st.session_state.pdf_docs, 1):
+            full_system += (
+                f"\n\n--- DOCUMENTO PDF {i}: {doc['name']} ---\n"
+                + doc["text"]
+                + "\n--- FIM DO DOCUMENTO ---"
+            )
 
     payload = [{"role": "system", "content": full_system}]
 
@@ -551,35 +551,70 @@ with st.sidebar:
 
     st.divider()
 
-    # ── PDF Upload ──────────────────────────────────────────────────────────
-    st.markdown('<div class="sidebar-label">📄 Documento PDF</div>', unsafe_allow_html=True)
+    # ── PDF Upload (múltiplos arquivos) ────────────────────────────────────
+    st.markdown('<div class="sidebar-label">📄 Documentos PDF</div>', unsafe_allow_html=True)
     if HAS_PDF:
-        uploaded_pdf = st.file_uploader(
+        st.markdown(
+            '<div style="font-size:0.72rem;color:var(--text3);margin-bottom:6px;">'
+            'Envie <strong>um ou vários PDFs</strong> ao mesmo tempo.</div>',
+            unsafe_allow_html=True,
+        )
+        uploaded_pdfs = st.file_uploader(
             "pdf_upload", type=["pdf"],
             label_visibility="collapsed", key="pdf_uploader",
+            accept_multiple_files=True,
         )
-        if uploaded_pdf is not None:
-            if st.session_state.pdf_name != uploaded_pdf.name:
-                with st.spinner("Lendo PDF..."):
-                    st.session_state.pdf_context = extract_pdf_text(uploaded_pdf)
-                    st.session_state.pdf_name    = uploaded_pdf.name
-            n_chars = len(st.session_state.pdf_context or "")
+
+        # Sync uploaded files → session state
+        if uploaded_pdfs:
+            existing_names = {d["name"] for d in st.session_state.pdf_docs}
+            new_names      = {f.name for f in uploaded_pdfs}
+
+            # Remove docs that were de-selected by the user
+            st.session_state.pdf_docs = [
+                d for d in st.session_state.pdf_docs if d["name"] in new_names
+            ]
+
+            # Add any newly uploaded PDFs
+            for pdf_file in uploaded_pdfs:
+                if pdf_file.name not in existing_names:
+                    with st.spinner(f"Lendo {pdf_file.name}…"):
+                        text = extract_pdf_text(pdf_file)
+                        st.session_state.pdf_docs.append({
+                            "name":  pdf_file.name,
+                            "text":  text,
+                            "chars": len(text),
+                        })
+        else:
+            # Uploader cleared — reset docs
+            if st.session_state.pdf_docs:
+                st.session_state.pdf_docs = []
+
+        # Display each loaded PDF with individual remove button
+        if st.session_state.pdf_docs:
+            total_chars = sum(d["chars"] for d in st.session_state.pdf_docs)
             st.markdown(
-                f'<div style="font-size:0.72rem;color:#38bdf8;background:#0ea5e915;'
-                f'border:1px solid #0ea5e940;border-radius:8px;padding:6px 10px;margin-top:4px;">'
-                f'📄 {uploaded_pdf.name}<br>'
-                f'<span style="color:var(--text4);">{n_chars:,} caracteres extraídos</span></div>',
+                f'<div style="font-size:0.72rem;color:#34d399;margin-bottom:6px;">'
+                f'✅ {len(st.session_state.pdf_docs)} PDF(s) carregado(s) · '
+                f'{total_chars:,} caracteres no total</div>',
                 unsafe_allow_html=True,
             )
-            if st.button("🗑️ Remover PDF", key="remove_pdf", use_container_width=True):
-                st.session_state.pdf_context = None
-                st.session_state.pdf_name    = None
+            for idx, doc in enumerate(st.session_state.pdf_docs):
+                st.markdown(
+                    f'<div style="font-size:0.72rem;color:#38bdf8;background:#0ea5e915;'
+                    f'border:1px solid #0ea5e940;border-radius:8px;'
+                    f'padding:6px 10px;margin-bottom:4px;">'
+                    f'📄 <strong>{html_module.escape(doc["name"])}</strong><br>'
+                    f'<span style="color:var(--text4);">{doc["chars"]:,} caracteres</span></div>',
+                    unsafe_allow_html=True,
+                )
+                if st.button(f"🗑️ Remover", key=f"remove_pdf_{idx}", use_container_width=True):
+                    st.session_state.pdf_docs.pop(idx)
+                    st.rerun()
+
+            if st.button("🗑️ Remover todos os PDFs", key="remove_all_pdfs", use_container_width=True):
+                st.session_state.pdf_docs = []
                 st.rerun()
-        else:
-            # File removed by user
-            if st.session_state.pdf_context:
-                st.session_state.pdf_context = None
-                st.session_state.pdf_name    = None
     else:
         st.markdown(
             '<div style="font-size:0.72rem;color:#f59e0b;">⚠️ pdfplumber não instalado.<br>'
@@ -852,10 +887,16 @@ st.markdown(f"""
 </div>
 """, unsafe_allow_html=True)
 
-# PDF active banner
-if st.session_state.pdf_context:
+# PDF active banner (múltiplos documentos)
+if st.session_state.pdf_docs:
+    names_html = " &nbsp;·&nbsp; ".join(
+        f"<strong>{html_module.escape(d['name'])}</strong>"
+        for d in st.session_state.pdf_docs
+    )
+    count = len(st.session_state.pdf_docs)
+    label = "Documento ativo" if count == 1 else f"{count} documentos ativos"
     st.markdown(
-        f'<div class="pdf-banner">📄 Documento ativo: <strong>{html_module.escape(st.session_state.pdf_name or "")}</strong>'
+        f'<div class="pdf-banner">📄 {label}: {names_html}'
         f' — Faça perguntas sobre o conteúdo.</div>',
         unsafe_allow_html=True,
     )
