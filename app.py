@@ -273,6 +273,26 @@ html, body, [data-testid="stAppViewContainer"] {{
 /* ── Streaming blink cursor ── */
 @keyframes blink {{ 50% {{ opacity:0; }} }}
 .cur {{ animation:blink 0.7s step-start infinite; }}
+
+/* ── Download section ── */
+.download-banner {{
+    display:flex; align-items:center; gap:10px;
+    background:#10b98115; border:1px solid #10b98140;
+    border-radius:10px; padding:10px 14px;
+    font-size:0.82rem; color:#34d399; margin-bottom:8px;
+}}
+.file-meta {{
+    background:var(--bg3); border:1px solid var(--border2);
+    border-radius:10px; padding:10px 12px; font-size:0.78rem;
+    color:var(--text2); margin-top:6px;
+}}
+.file-meta b {{ color:var(--text); }}
+.file-type-badge {{
+    display:inline-block; background:#6c63ff25;
+    border:1px solid #6c63ff50; border-radius:6px;
+    padding:2px 8px; font-size:0.7rem; color:#a78bfa;
+    font-family:monospace; margin-top:4px;
+}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -653,6 +673,70 @@ with st.sidebar:
     )
     # QR Code image from external service
     st.image(qr_url, caption="Escaneie com o celular", use_container_width=False, width=160)
+
+    st.divider()
+
+    # ── Download de Arquivos (qualquer formato) ──────────────────────────────
+    st.markdown('<div class="sidebar-label">📥 Download de Arquivos</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div style="font-size:0.72rem;color:var(--text3);margin-bottom:8px;">'
+        'Carregue qualquer arquivo (JPG, PNG, EX5, PDF, DOCX, ZIP…) e faça o download.</div>',
+        unsafe_allow_html=True,
+    )
+    uploaded_download_file = st.file_uploader(
+        "Selecionar arquivo para download",
+        type=None,          # ← aceita QUALQUER tipo de arquivo
+        label_visibility="collapsed",
+        key="download_uploader",
+        help="Arraste qualquer arquivo aqui. Formatos aceitos: JPG, PNG, EX5, MQL5, PDF, DOCX, XLSX, ZIP, MP4, e muito mais.",
+    )
+
+    if uploaded_download_file is not None:
+        file_bytes  = uploaded_download_file.read()
+        file_name   = uploaded_download_file.name
+        file_size   = len(file_bytes)
+        file_type   = uploaded_download_file.type or "application/octet-stream"
+
+        # Human-readable size
+        if file_size < 1024:
+            size_str = f"{file_size} B"
+        elif file_size < 1024 ** 2:
+            size_str = f"{file_size / 1024:.1f} KB"
+        else:
+            size_str = f"{file_size / (1024**2):.2f} MB"
+
+        # Extension badge
+        ext = os.path.splitext(file_name)[-1].upper() or "BIN"
+
+        st.markdown(
+            f'<div class="download-banner">✅ Arquivo pronto para download!</div>'
+            f'<div class="file-meta">'
+            f'<b>📄 Nome:</b> {html_module.escape(file_name)}<br>'
+            f'<b>📦 Tamanho:</b> {size_str}<br>'
+            f'<b>🔖 Tipo:</b> <span class="file-type-badge">{html_module.escape(ext)}</span>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+        st.download_button(
+            label=f"⬇️ Baixar {html_module.escape(file_name)}",
+            data=file_bytes,
+            file_name=file_name,
+            mime=file_type,
+            use_container_width=True,
+            key="btn_download_file",
+        )
+    else:
+        st.markdown(
+            '<div style="font-size:0.72rem;color:var(--text4);background:var(--bg3);'
+            'border:1px dashed var(--border2);border-radius:10px;padding:14px;'
+            'text-align:center;margin-top:4px;">'
+            '📁 Nenhum arquivo selecionado<br>'
+            '<span style="font-size:0.65rem;color:var(--text4);">'
+            'Aceita: JPG · PNG · EX5 · MQL5 · PDF · DOCX · ZIP · MP4 · e qualquer outro'
+            '</span></div>',
+            unsafe_allow_html=True,
+        )
 
     st.divider()
 
