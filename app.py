@@ -53,6 +53,7 @@ _DEFAULTS = {
     "pdf_docs":      [],     # list of dicts: {name, text, chars}
     "pending_image": None,   # dict: {b64, mime, name}
     "img_input_key": 0,      # incremented to reset uploaders after send
+    "camera_active": False,  # bool: camera widget ligada/desligada
 }
 
 # ── Migração: remove chaves antigas de sessões em cache ──────────────────────
@@ -633,63 +634,98 @@ with st.sidebar:
     # ── Image / Camera ──────────────────────────────────────────────────────
     st.markdown('<div class="sidebar-label">📷 Câmera / Imagem</div>', unsafe_allow_html=True)
 
-    # Always show camera — warn if model doesn't support vision
-    if not supports_vision:
-        st.markdown(
-            '<div style="font-size:0.75rem;background:#f59e0b18;border:1px solid #f59e0b40;'
-            'border-radius:8px;padding:8px 10px;color:#f59e0b;margin-bottom:8px;">'
-            '⚠️ O modelo atual <strong>não suporta imagens</strong>.<br>'
-            'Troque para GPT-4o, Claude ou Gemini Flash para usar a câmera.</div>',
-            unsafe_allow_html=True,
-        )
-        # One-click switch to a vision model
-        if st.button("🔄 Usar GPT-4o Mini (c/ visão)", use_container_width=True, key="switch_vision_model"):
-            # We can't set selectbox state directly, so we guide the user
-            st.info("⬆️ Selecione '⚡ GPT-4o Mini' no seletor de Modelo acima.")
+    # ── Botão Liga / Desliga Câmera ─────────────────────────────────────────
+    cam_on     = st.session_state.camera_active
+    cam_label  = "🟢 Câmera LIGADA — clique para desligar" if cam_on else "🔴 Câmera DESLIGADA — clique para ligar"
+    cam_color  = "#10b98120" if cam_on else "#ef444420"
+    cam_border = "#10b98150" if cam_on else "#ef444450"
+    cam_text   = "#34d399"   if cam_on else "#f87171"
 
-    img_source = st.radio(
-        "Fonte da imagem", ["📷 Câmera do Celular", "📁 Upload de Arquivo"],
-        horizontal=False, label_visibility="collapsed", key="img_source_radio",
+    st.markdown(
+        f'<div style="background:{cam_color};border:1px solid {cam_border};'
+        f'border-radius:10px;padding:8px 12px;font-size:0.78rem;'
+        f'color:{cam_text};margin-bottom:8px;font-weight:600;">'
+        f'{cam_label}</div>',
+        unsafe_allow_html=True,
     )
-
-    img_key = st.session_state.img_input_key
-
-    if img_source == "📁 Upload de Arquivo":
-        up_img = st.file_uploader(
-            "Enviar imagem", type=["jpg", "jpeg", "png", "webp"],
-            label_visibility="collapsed", key=f"img_uploader_{img_key}",
-        )
-        if up_img is not None:
-            b64, mime = file_to_base64(up_img)
-            st.session_state.pending_image = {"b64": b64, "mime": mime, "name": up_img.name}
-            st.image(up_img, use_container_width=True)
-    else:
-        st.markdown(
-            '<div style="font-size:0.72rem;color:#38bdf8;margin-bottom:6px;">'
-            '📱 Abra este app no celular e clique em <strong>Tirar foto</strong></div>',
-            unsafe_allow_html=True,
-        )
-        cam_img = st.camera_input(
-            "Tirar foto com a câmera", label_visibility="collapsed",
-            key=f"camera_input_{img_key}",
-        )
-        if cam_img is not None:
-            b64, _ = file_to_base64(cam_img)
-            st.session_state.pending_image = {"b64": b64, "mime": "image/jpeg", "name": "camera.jpg"}
-            st.success("✅ Foto capturada! Escreva sua pergunta e envie.")
-
-    if st.session_state.pending_image:
-        pimg = st.session_state.pending_image
-        st.markdown(
-            f'<div style="font-size:0.72rem;color:#a78bfa;background:#6c63ff15;'
-            f'border:1px solid #6c63ff40;border-radius:8px;padding:6px 10px;margin-top:4px;">'
-            f'🖼️ <strong>{pimg["name"]}</strong> — pronto para enviar</div>',
-            unsafe_allow_html=True,
-        )
-        if st.button("❌ Remover imagem", key="remove_img", use_container_width=True):
+    if st.button(
+        "📤 Desligar Câmera" if cam_on else "📥 Ligar Câmera",
+        key="btn_toggle_camera",
+        use_container_width=True,
+    ):
+        st.session_state.camera_active = not cam_on
+        if cam_on:   # desligando — limpa imagem pendente
             st.session_state.pending_image = None
             st.session_state.img_input_key += 1
-            st.rerun()
+        st.rerun()
+
+    # Só mostra controles quando câmera estiver ligada
+    if st.session_state.camera_active:
+
+        if not supports_vision:
+            st.markdown(
+                '<div style="font-size:0.75rem;background:#f59e0b18;border:1px solid #f59e0b40;'
+                'border-radius:8px;padding:8px 10px;color:#f59e0b;margin-bottom:8px;">'
+                '⚠️ O modelo atual <strong>não suporta imagens</strong>.<br>'
+                'Troque para GPT-4o, Claude ou Gemini Flash para usar a câmera.</div>',
+                unsafe_allow_html=True,
+            )
+            if st.button("🔄 Usar GPT-4o Mini (c/ visão)", use_container_width=True, key="switch_vision_model"):
+                st.info("⬆️ Selecione '⚡ GPT-4o Mini' no seletor de Modelo acima.")
+
+        img_source = st.radio(
+            "Fonte da imagem", ["📷 Câmera do Celular", "📁 Upload de Arquivo"],
+            horizontal=False, label_visibility="collapsed", key="img_source_radio",
+        )
+
+        img_key = st.session_state.img_input_key
+
+        if img_source == "📁 Upload de Arquivo":
+            up_img = st.file_uploader(
+                "Enviar imagem", type=["jpg", "jpeg", "png", "webp"],
+                label_visibility="collapsed", key=f"img_uploader_{img_key}",
+            )
+            if up_img is not None:
+                b64, mime = file_to_base64(up_img)
+                st.session_state.pending_image = {"b64": b64, "mime": mime, "name": up_img.name}
+                st.image(up_img, use_container_width=True)
+        else:
+            st.markdown(
+                '<div style="font-size:0.72rem;color:#38bdf8;margin-bottom:6px;">'
+                '📱 Abra este app no celular e clique em <strong>Tirar foto</strong></div>',
+                unsafe_allow_html=True,
+            )
+            cam_img = st.camera_input(
+                "Tirar foto com a câmera", label_visibility="collapsed",
+                key=f"camera_input_{img_key}",
+            )
+            if cam_img is not None:
+                b64, _ = file_to_base64(cam_img)
+                st.session_state.pending_image = {"b64": b64, "mime": "image/jpeg", "name": "camera.jpg"}
+                st.success("✅ Foto capturada! Escreva sua pergunta e envie.")
+
+        if st.session_state.pending_image:
+            pimg = st.session_state.pending_image
+            st.markdown(
+                f'<div style="font-size:0.72rem;color:#a78bfa;background:#6c63ff15;'
+                f'border:1px solid #6c63ff40;border-radius:8px;padding:6px 10px;margin-top:4px;">'
+                f'🖼️ <strong>{pimg["name"]}</strong> — pronto para enviar</div>',
+                unsafe_allow_html=True,
+            )
+            if st.button("❌ Remover imagem", key="remove_img", use_container_width=True):
+                st.session_state.pending_image = None
+                st.session_state.img_input_key += 1
+                st.rerun()
+    else:
+        # Câmera desligada — placeholder
+        st.markdown(
+            '<div style="font-size:0.72rem;color:var(--text4);background:var(--bg3);'
+            'border:1px dashed var(--border2);border-radius:10px;padding:14px;'
+            'text-align:center;margin-top:4px;">'
+            '📷 Câmera desligada<br>'
+            '<span style="font-size:0.65rem;">Clique em <strong>Ligar Câmera</strong> para ativar</span></div>',
+            unsafe_allow_html=True,
+        )
 
     st.divider()
 
@@ -1053,12 +1089,16 @@ if prompt:
             st.session_state.pending_image = None
             st.session_state.img_input_key += 1
 
+        # ✅ Rerun APENAS no sucesso
+        st.rerun()
+
     except requests.exceptions.Timeout:
         stream_placeholder.empty()
         st.error(
             "⏱️ **Tempo limite excedido.** O modelo demorou demais para responder.\n\n"
             "💡 Tente: (1) Usar outro modelo na sidebar, (2) Reduzir o Max Tokens, (3) Tentar novamente."
         )
+        st.stop()
     except requests.exceptions.HTTPError as exc:
         stream_placeholder.empty()
         code = exc.response.status_code if exc.response is not None else 0
@@ -1069,15 +1109,21 @@ if prompt:
         except Exception:
             err_detail = exc.response.text[:400] if exc.response is not None else str(exc)
         msgs_map = {
-            401: f"🔑 **API Key inválida.** Verifique o arquivo `.env`.\n\nDetalhe: {err_detail}",
+            401: f"🔑 **API Key inválida.** Verifique o arquivo `.env` ou os Secrets do Streamlit Cloud.\n\nDetalhe: {err_detail}",
             402: f"💳 **Créditos insuficientes.** Acesse openrouter.ai/credits\n\nDetalhe: {err_detail}",
             429: f"🚦 **Rate limit atingido.** Aguarde alguns segundos e tente novamente.\n\nDetalhe: {err_detail}",
             503: f"⚠️ **Modelo indisponível (503).** O modelo gratuito está sobrecarregado.\n\n💡 Troque para outro modelo na sidebar.\n\nDetalhe: {err_detail}",
             524: f"⏱️ **Timeout do servidor (524).** O modelo demorou demais.\n\n💡 Tente um modelo mais rápido.\n\nDetalhe: {err_detail}",
         }
         st.error(msgs_map.get(code, f"❌ **Erro HTTP {code}**\n\nDetalhe: {err_detail}"))
+        st.stop()
     except Exception as exc:
         stream_placeholder.empty()
-        st.error(f"❌ **Erro inesperado:** {type(exc).__name__}: {exc}\n\n💡 Verifique o terminal do Streamlit para mais detalhes.")
-
-    st.rerun()
+        st.error(
+            f"❌ **Erro inesperado:** `{type(exc).__name__}: {exc}`\n\n"
+            "💡 Possíveis causas:\n"
+            "- API Key não configurada nos Secrets do Streamlit Cloud\n"
+            "- Problema de conexão com OpenRouter\n"
+            "- Verifique os logs: Manage App → Logs"
+        )
+        st.stop()
