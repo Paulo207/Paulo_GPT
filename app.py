@@ -54,6 +54,12 @@ _DEFAULTS = {
     "pending_image": None,   # dict: {b64, mime, name}
     "img_input_key": 0,      # incremented to reset uploaders after send
 }
+
+# ── Migração: remove chaves antigas de sessões em cache ──────────────────────
+for _old_key in ("pdf_context", "pdf_name"):
+    if _old_key in st.session_state:
+        del st.session_state[_old_key]
+
 for _k, _v in _DEFAULTS.items():
     if _k not in st.session_state:
         st.session_state[_k] = _v
